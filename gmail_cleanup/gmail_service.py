@@ -7,8 +7,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 
-# Read-only access: this code cannot modify or delete emails.
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+# Allows reading and modifying Gmail messages, including moving them to Trash.
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CREDENTIALS_FILE = PROJECT_ROOT / "credentials.json"
@@ -87,3 +87,78 @@ def list_recent_emails(max_results: int = 10) -> list[dict]:
         )
 
     return results
+
+
+def find_old_emails(days: int = 30) -> list[dict]:
+    """Find Gmail messages older than the specified number of days."""
+    if not 1 <= days <= 3650:
+        raise ValueError("days must be between 1 and 3650")
+
+    service = get_gmail_service()
+
+    response = (
+        service.users()
+        .messages()
+        .list(
+            userId="me",
+            q=f"older_than:{days}d",
+            maxResults=50,
+        )
+        .execute()
+    )
+
+    results = []
+
+    for message in response.get("messages", []):
+        details = (
+            service.users()
+            .messages()
+            .get(
+                userId="me",
+                id=message["id"],
+                format="metadata",
+                metadataHeaders=["From", "Subject", "Date"],
+            )
+            .execute()
+        )
+
+        headers = {
+            header["name"].lower(): header["value"]
+            for header in details.get("payload", {}).get("headers", [])
+        }
+
+        results.append(
+            {
+                "id": details["id"],
+                "sender": headers.get("from", "(unknown sender)"),
+                "subject": headers.get("subject", "(no subject)"),
+                "date": headers.get("date", "(unknown date)"),
+            }
+        )
+
+    return results
+
+
+def move_emails_to_trash(email_ids: list[str]) -> list[dict]:
+    """Move selected Gmail messages to Trash."""
+    if not email_ids:
+        return []
+
+    service = get_gmail_service()
+    results = []
+
+    for email_id in email_ids:
+        response = (
+            service.users()
+            .messages()
+            .trash(userId="me", id=email_id)
+            .execute()
+        )
+
+        results.append({
+            "id": response["id"],
+            "status": "moved_to_trash",
+        })
+
+    return results
+

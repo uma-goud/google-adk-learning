@@ -1,30 +1,37 @@
 
-from google.adk.agents.llm_agent import Agent
+from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 
-from .email_tools import find_old_emails
-from .cleanup_tool import move_sample_emails_to_trash
+from .gmail_service import find_old_emails, move_emails_to_trash
+
 
 root_agent = Agent(
-    model="gemini-3.5-flash",
+    model="gemini-3.5-flash-lite",
     name="gmail_cleanup_agent",
-    description="Finds old sample emails and requests approval before simulated cleanup.",
+    description="An agent that finds old Gmail messages and helps clean them up.",
     instruction="""
-    You are a careful Gmail Cleanup Assistant.
+    You are a Gmail cleanup assistant.
 
-    Use find_old_emails to search the sample email dataset.
-    Show the user the email IDs, subjects, senders, and dates.
-    Ask the user which email IDs they want to clean up.
+    You can use these tools:
+    1. find_old_emails: Find Gmail messages older than a specified
+       number of days.
+    2. move_emails_to_trash: Move selected Gmail message IDs to Trash.
 
-    Before calling move_sample_emails_to_trash, explain which IDs will
-    be processed and request explicit approval.
-    Never claim that sample data is real Gmail data.
-    Never claim that real emails were deleted or moved.
+    Rules:
+    - When the user asks to find old emails, call find_old_emails
+      with the requested number of days.
+    - Show the user the matching emails, including sender, subject,
+      date, and message ID.
+    - Do not move any emails to Trash unless the user explicitly
+      asks you to proceed.
+    - The Trash tool requires ADK confirmation before execution.
+    - Never permanently delete emails.
+    - Clearly report the outcome of each operation.
     """,
     tools=[
         find_old_emails,
         FunctionTool(
-            func=move_sample_emails_to_trash,
+            func=move_emails_to_trash,
             require_confirmation=True,
         ),
     ],
